@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CEO ADMIN PANEL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { background:#fff; color:#000; font-family:sans-serif; padding:20px; }
+        .card { border:1px solid #ddd; padding:15px; margin-bottom:15px; border-radius:8px; background:#f9f9f9; }
+        input { padding:8px; width:90%; margin:5px 0; border:1px solid #ccc; border-radius:4px; }
+        button { padding:10px 20px; cursor:pointer; font-weight:bold; }
+        .approve-btn { background:#22c55e; color:#fff; border:none; }
+        .history-table { width:100%; border-collapse: collapse; margin-top:20px; font-size: 13px; }
+        .history-table th, .history-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .history-table th { background-color: #f2f2f2; }
+        h2 { border-bottom: 2px solid #333; padding-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div id="login" style="text-align:center; margin-top:50px;">
+        <h1>CEO LOGIN</h1>
+        <input type="password" id="pw" placeholder="Enter Password" style="width:200px;"><br><br>
+        <button onclick="auth()" style="background:#333; color:#fff;">LOGIN</button>
+    </div>
+
+    <div id="panel" style="display:none;">
+        <div style="display:flex; justify-content: space-between; align-items: center;">
+            <h2>PENDING ORDERS</h2>
+            <a href="https://imgbb.com/upload" target="_blank" style="padding:10px; background:#F3BA2F; color:#000; text-decoration:none; border-radius:5px; font-weight:bold;">UPLOAD IMAGE (ImgBB)</a>
+        </div>
+        <div id="list">Checking for orders...</div>
+
+        <h2 style="margin-top:50px; color:#2563eb;">APPROVAL HISTORY</h2>
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Brand Name</th>
+                    <th>Plot ID</th>
+                    <th>Image</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody id="history-list">
+                </tbody>
+        </table>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script>
+        const config = { databaseURL: "https://m-legacy-5cf2b-default-rtdb.firebaseio.com/" };
+        firebase.initializeApp(config);
+        const db = firebase.database();
+
+        function auth() {
+            if(document.getElementById('pw').value === "KAWSARahmed22@@") {
+                document.getElementById('login').style.display='none';
+                document.getElementById('panel').style.display='block';
+                loadOrders();
+                loadHistory();
+            } else { alert("Wrong Password!"); }
+        }
+
+        // পেন্ডিং অর্ডার লোড করা
+        function loadOrders() {
+            db.ref('orders').on('value', s => {
+                const list = document.getElementById('list'); list.innerHTML = "";
+                const data = s.val(); if(!data) return list.innerHTML = "No pending orders.";
+                Object.keys(data).forEach(id => {
+                    list.innerHTML += `<div class="card">
+                        <p><b>Brand:</b> ${data[id].name} (Choice: ${data[id].plotID})</p>
+                        <input type="text" id="img_${id}" placeholder="Direct Image Link">
+                        <input type="text" id="web_${id}" placeholder="Website Link">
+                        <input type="number" id="plot_${id}" placeholder="Final Plot ID">
+                        <button class="approve-btn" onclick="approve('${id}', '${data[id].name}')">APPROVE & PUBLISH</button>
+                    </div>`;
+                });
+            });
+        }
+
+        // এপ্রুভাল হিস্টরি লোড করা
+        function loadHistory() {
+            db.ref('history').orderByChild('timestamp').on('value', s => {
+                const hList = document.getElementById('history-list'); hList.innerHTML = "";
+                const data = s.val(); if(!data) return;
+                Object.values(data).reverse().forEach(h => {
+                    hList.innerHTML += `<tr>
+                        <td>${h.name}</td>
+                        <td><b>#${h.plotID}</b></td>
+                        <td><a href="${h.imageUrl}" target="_blank">View Logo</a></td>
+                        <td>${new Date(h.timestamp).toLocaleDateString()}</td>
+                    </tr>`;
+                });
+            });
+        }
+
+        // এপ্রুভ করার ফাংশন
+        function approve(id, name) {
+            const img = document.getElementById('img_'+id).value, 
+                  web = document.getElementById('web_'+id).value, 
+                  pID = parseInt(document.getElementById('plot_'+id).value);
+            
+            if(!img || !web || !pID) return alert("All fields are required!");
+
+            const x = ((pID-1) % 100) * 60, y = Math.floor((pID-1) / 100) * 40;
+            const timestamp = Date.now();
+
+            // ১. ম্যাপে পাবলিশ করা
+            db.ref('pixels/' + id).set({ name, imageUrl: img, link: web, x, y, plotID: pID })
+            .then(() => {
+                // ২. হিস্টরিতে সেভ করা
+                db.ref('history/' + id).set({ name, plotID: pID, imageUrl: img, timestamp });
+                // ৩. পেন্ডিং থেকে ডিলিট করা
+                db.ref('orders/' + id).remove();
+                alert(name + " Approved Successfully!");
+            });
+        }
+    </script>
+</body>
+</html>
